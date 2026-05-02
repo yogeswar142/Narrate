@@ -70,7 +70,13 @@ app.post('/api/generate', async (req, res) => {
 
     const githubInfo = await getGithubInfo(githubUrl);
     
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
+    const modelsToTry = [
+      'gemini-1.5-flash', 
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro', 
+      'gemini-1.5-pro-latest',
+      'gemini-2.0-flash-exp'
+    ];
     let lastError: any = null;
 
     for (const modelName of modelsToTry) {
@@ -101,9 +107,16 @@ Project Structure: ${githubInfo.structure}
         return res.json({ versions, modelUsed: modelName });
       } catch (error: any) {
         lastError = error;
-        // If it's a quota error (429), try the next model
-        if (error.message?.includes('429') || error.status === 429) {
-          console.warn(`${modelName} quota exceeded, trying next model...`);
+        console.error(`Error with ${modelName}:`, error.message);
+
+        // If it's a quota error (429) OR a 404 (model not found for this key), try the next model
+        if (
+          error.message?.includes('429') || 
+          error.status === 429 || 
+          error.message?.includes('404') || 
+          error.status === 404
+        ) {
+          console.warn(`${modelName} unavailable, trying next model...`);
           continue;
         }
         // If it's another type of error, break and throw
