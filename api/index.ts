@@ -70,30 +70,57 @@ app.post('/api/generate', async (req, res) => {
 
     const githubInfo = await getGithubInfo(githubUrl);
     
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash',
-      systemInstruction: "Transform these technical notes into 3 LinkedIn post versions: \n- 'The Story' (Relatable struggle/learning)\n- 'The Tech' (Stack/Complexity/Performance)\n- 'The Punchy' (Short, 3-line hook). \nUse developer terminology, scannable formatting (short lines), and 3 relevant hashtags. No generic corporate fluff. Incorporate technical context from the provided GitHub info if available."
-    });
+    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-exp'];
+    let lastError: any = null;
 
-    let prompt = `
+    for (const modelName of modelsToTry) {
+      try {
+        console.log(`Attempting generation with ${modelName}...`);
+        const model = genAI.getGenerativeModel({ 
+          model: modelName,
+          systemInstruction: "Transform these technical notes into 3 LinkedIn post versions: \n- 'The Story' (Relatable struggle/learning)\n- 'The Tech' (Stack/Complexity/Performance)\n- 'The Punchy' (Short, 3-line hook). \nUse developer terminology, scannable formatting (short lines), and 3 relevant hashtags. No generic corporate fluff. Incorporate technical context from the provided GitHub info if available."
+        });
+
+        let prompt = `
 Project: ${projectName}
 Technical Notes: ${notes}
 Key Win: ${win}
 `;
 
-    if (githubInfo) {
-      prompt += `
+        if (githubInfo) {
+          prompt += `
 GitHub Tech Stack: ${githubInfo.techStack}
 Project Structure: ${githubInfo.structure}
 `;
+        }
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
+        const versions = parseAIResponse(text);
+        
+        return res.json({ versions, modelUsed: modelName });
+      } catch (error: any) {
+        lastError = error;
+        // If it's a quota error (429), try the next model
+        if (error.message?.includes('429') || error.status === 429) {
+          console.warn(`${modelName} quota exceeded, trying next model...`);
+          continue;
+        }
+        // If it's another type of error, break and throw
+        break;
+      }
     }
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const versions = parseAIResponse(text);
-    res.json({ versions });
+    // If we reach here, all models failed or a non-quota error occurred
+    if (lastError?.message?.includes('429') || lastError?.status === 429) {
+      return res.status(429).json({ 
+        error: 'AI Quota Exceeded: All available free-tier models are currently busy. Please wait a moment and try again.' 
+      });
+    }
+
+    throw lastError || new Error('Generation failed');
   } catch (error: any) {
-    console.error('Error generating content:', error);
+    console.error('Final generation error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate content' });
   }
 });
