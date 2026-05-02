@@ -15,7 +15,8 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), env: !!process.env.GEMINI_API_KEY });
 });
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+const genAI = new GoogleGenerativeAI(apiKey);
 
 async function getGithubInfo(url: string) {
   if (!url) return null;
@@ -56,7 +57,11 @@ app.post('/api/generate', async (req, res) => {
   try {
     const { projectName, githubUrl, notes, win, password } = req.body;
 
-    if (password !== process.env.ADMIN_PASSWORD) {
+    const adminPassword = (process.env.ADMIN_PASSWORD || '').toString().trim();
+    const providedPassword = (password || '').toString().trim();
+    
+    if (providedPassword !== adminPassword) {
+      console.warn(`[Auth] Password mismatch. Provided: "${providedPassword}", Expected: "${adminPassword}"`);
       return res.status(401).json({ error: 'Unauthorized: Invalid password' });
     }
 
@@ -69,72 +74,60 @@ app.post('/api/generate', async (req, res) => {
     }
 
     const githubInfo = await getGithubInfo(githubUrl);
+    console.log('GitHub Info fetched:', !!githubInfo);
     
     const modelsToTry = [
+      'gemini-2.0-flash-lite',
+      'gemini-1.5-flash-8b-latest',
       'gemini-1.5-flash', 
-      'gemini-1.5-flash-latest',
       'gemini-1.5-pro', 
-      'gemini-1.5-pro-latest',
-      'gemini-2.0-flash-exp'
+      'gemini-pro'
     ];
     let lastError: any = null;
 
     for (const modelName of modelsToTry) {
       try {
-        console.log(`Attempting generation with ${modelName}...`);
+        console.log(`[AI] Attempting with model: ${modelName}`);
         const model = genAI.getGenerativeModel({ 
           model: modelName,
           systemInstruction: "Transform these technical notes into 3 LinkedIn post versions: \n- 'The Story' (Relatable struggle/learning)\n- 'The Tech' (Stack/Complexity/Performance)\n- 'The Punchy' (Short, 3-line hook). \nUse developer terminology, scannable formatting (short lines), and 3 relevant hashtags. No generic corporate fluff. Incorporate technical context from the provided GitHub info if available."
         });
 
-        let prompt = `
-Project: ${projectName}
-Technical Notes: ${notes}
-Key Win: ${win}
-`;
-
+        let prompt = `Project: ${projectName}\nNotes: ${notes}\nWin: ${win}`;
         if (githubInfo) {
-          prompt += `
-GitHub Tech Stack: ${githubInfo.techStack}
-Project Structure: ${githubInfo.structure}
-`;
+          prompt += `\nTech Stack: ${githubInfo.techStack}\nStructure: ${githubInfo.structure}`;
         }
 
         const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const versions = parseAIResponse(text);
         
+        if (!result.response) {
+          throw new Error('Empty response from Gemini');
+        }
+
+        const text = result.response.text();
+        console.log(`[AI] Success with ${modelName}`);
+        
+        const versions = parseAIResponse(text);
         return res.json({ versions, modelUsed: modelName });
       } catch (error: any) {
         lastError = error;
-        console.error(`Error with ${modelName}:`, error.message);
+        const msg = error.message || 'Unknown error';
+        console.error(`[AI] Error with ${modelName}:`, msg);
 
-        // If it's a quota error (429) OR a 404 (model not found for this key), try the next model
-        if (
-          error.message?.includes('429') || 
-          error.status === 429 || 
-          error.message?.includes('404') || 
-          error.status === 404
-        ) {
-          console.warn(`${modelName} unavailable, trying next model...`);
+        // Continue to next model if quota or not found
+        if (msg.includes('429') || msg.includes('404') || error.status === 429 || error.status === 404) {
           continue;
         }
-        // If it's another type of error, break and throw
         break;
       }
     }
 
-    // If we reach here, all models failed or a non-quota error occurred
-    if (lastError?.message?.includes('429') || lastError?.status === 429) {
-      return res.status(429).json({ 
-        error: 'AI Quota Exceeded: All available free-tier models are currently busy. Please wait a moment and try again.' 
-      });
-    }
-
-    throw lastError || new Error('Generation failed');
+    const finalErrorMessage = lastError?.message || 'All models failed to generate content';
+    console.error('Final failure:', finalErrorMessage);
+    return res.status(500).json({ error: finalErrorMessage });
   } catch (error: any) {
-    console.error('Final generation error:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate content' });
+    console.error('CRITICAL SERVER ERROR:', error);
+    res.status(500).json({ error: `Critical Server Error: ${error.message || 'Unknown'}` });
   }
 });
 

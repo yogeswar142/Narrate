@@ -62,9 +62,20 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [results, setResults] = useState<PostVersions | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown timer logic
+  React.useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (cooldown > 0) return;
+    
     setLoading(true);
     setError(null);
     try {
@@ -93,6 +104,7 @@ export default function App() {
       setError(error.message);
     } finally {
       setLoading(false);
+      setCooldown(15); // 15-second cooldown to respect RPD/RPM limits
     }
   };
 
@@ -212,12 +224,14 @@ export default function App() {
               )}
 
               <button
-                disabled={loading}
+                disabled={loading || cooldown > 0}
                 type="submit"
                 className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 text-white font-semibold py-4 rounded-xl transition-all flex items-center justify-center gap-2 group overflow-hidden relative"
               >
                 {loading ? (
                   <Loader2 className="animate-spin" size={20} />
+                ) : cooldown > 0 ? (
+                  <span>Wait {cooldown}s (Rate Limit)</span>
                 ) : (
                   <>
                     <span>Generate Narratives</span>
