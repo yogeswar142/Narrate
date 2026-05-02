@@ -56,23 +56,33 @@ const PostCard = ({ title, content, icon: Icon, onCopy }: { title: string; conte
 export default function App() {
   const [loading, setLoading] = useState(false);
   const [projectName, setProjectName] = useState('');
+  const [githubUrl, setGithubUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [win, setWin] = useState('');
+  const [password, setPassword] = useState('');
   const [results, setResults] = useState<PostVersions | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectName, notes, win }),
+        body: JSON.stringify({ projectName, githubUrl, notes, win, password }),
       });
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Generation failed');
+      }
+      
       setResults(data.versions);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Generation failed:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -97,15 +107,15 @@ export default function App() {
       <div className="max-w-4xl mx-auto">
         <header className="mb-12 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+            <a href="https://yogeswar.xyz" className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center hover:bg-indigo-500 transition-colors">
               <Terminal className="text-white" size={24} />
-            </div>
+            </a>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Narrate</h1>
-              <p className="text-zinc-500 text-sm font-mono">MVP // Developer Content Engine</p>
+              <p className="text-zinc-500 text-sm font-mono">by Yogeswar // Developer Content Engine</p>
             </div>
           </div>
-          <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors">
+          <a href="https://github.com/yogeswar142/Narrate" target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-white transition-colors">
             <Code2 size={20} />
           </a>
         </header>
@@ -136,6 +146,17 @@ export default function App() {
                 </div>
 
                 <div className="space-y-1.5">
+                  <label className="text-xs font-mono uppercase tracking-widest text-zinc-500 ml-1">GitHub Repo URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={githubUrl}
+                    onChange={(e) => setGithubUrl(e.target.value)}
+                    placeholder="https://github.com/user/repo"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-zinc-700"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
                   <label className="text-xs font-mono uppercase tracking-widest text-zinc-500 ml-1">What did you actually do?</label>
                   <textarea
                     required
@@ -158,7 +179,29 @@ export default function App() {
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-zinc-700"
                   />
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono uppercase tracking-widest text-zinc-500 ml-1">Admin Password</label>
+                  <input
+                    required
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-zinc-700"
+                  />
+                </div>
               </div>
+
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm font-mono"
+                >
+                  ERROR: {error}
+                </motion.div>
+              )}
 
               <button
                 disabled={loading}
@@ -239,7 +282,7 @@ export default function App() {
         </main>
 
         <footer className="mt-20 pt-8 border-t border-zinc-900 text-center text-zinc-600 text-xs font-mono">
-          NARRATE // BUILT FOR DEVELOPERS BY ANTIGRAVITY
+          NARRATE // BUILT FOR DEVELOPERS BY <a href="https://yogeswar.xyz" className="hover:text-indigo-400 transition-colors underline decoration-zinc-800">YOGESWAR</a>
         </footer>
       </div>
     </div>
