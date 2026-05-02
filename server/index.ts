@@ -11,6 +11,10 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 async function getGithubInfo(url: string) {
@@ -56,6 +60,10 @@ app.post('/api/generate', async (req, res) => {
   // Check if password matches ADMIN_PASSWORD in environment variables
   if (password !== process.env.ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized: Invalid password' });
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'Server configuration error: Missing AI API Key' });
   }
 
   if (!projectName || !notes || !win) {
@@ -107,7 +115,8 @@ function parseAIResponse(text: string) {
 
 export default app;
 
-if (process.env.NODE_ENV !== 'production') {
+// Only listen locally, Vercel will handle the app export
+if (!process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
   });

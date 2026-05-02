@@ -73,13 +73,21 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectName, githubUrl, notes, win, password }),
       });
-      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Generation failed');
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Generation failed');
+        }
+        setResults(data.versions);
+      } else {
+        const text = await response.text();
+        if (!response.ok) {
+          throw new Error(text || `Server error: ${response.status}`);
+        }
+        throw new Error('Unexpected response format from server');
       }
-      
-      setResults(data.versions);
     } catch (error: any) {
       console.error('Generation failed:', error);
       setError(error.message);
