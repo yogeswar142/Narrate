@@ -9,13 +9,13 @@ Narrate is a developer-focused content engine that captures organic technical va
 ## 📸 Product Showcases
 
 ### Landing Dashboard
-![Landing Page](Images/homescreen.png)
+![Landing Page](public/LandingPage.png)
 
 ### The Sandbox Post Builder
-![Sandbox UI](Images/middle.png)
+![Sandbox UI](public/BuilderPage-1.png)
 
 ### Interactive LinkedIn Feeds & Output Previews
-![Preview Panel](Images/ending.png)
+![Preview Panel](public/BuilderPage.png)
 
 ---
 
